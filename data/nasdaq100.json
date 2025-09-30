@@ -1,0 +1,24 @@
+{
+  "symbols": [
+    "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "GOOG", "TSLA",
+    "AVGO", "PEP", "COST", "ASML", "AZN", "CSCO", "TMUS", "ADBE",
+    "NFLX", "QCOM", "TXN", "INTC", "AMD", "INTU", "AMGN", "ISRG",
+    "HON", "AMAT", "PDD", "BKNG", "VRTX", "PANW", "ADI", "SBUX",
+    "GILD", "MU", "LRCX", "ADP", "MDLZ", "REGN", "MELI", "KLAC",
+    "SNPS", "CDNS", "PYPL", "CTAS", "MAR", "CRWD", "NXPI", "MRVL",
+    "ORLY", "CSX", "FTNT", "ADSK", "PCAR", "WDAY", "ROP", "ABNB",
+    "CHTR", "CPRT", "MNST", "PAYX", "ROST", "ODFL", "IDXX", "AEP",
+    "KDP", "FAST", "BKR", "LULU", "CTSH", "VRSK", "TEAM", "KHC",
+    "DDOG", "GEHC", "EXC", "EA", "XEL", "CCEP", "ON", "CDW",
+    "TTWO", "FANG", "ANSS", "BIIB", "CSGP", "ILMN", "GFS", "DXCM",
+    "WBD", "MDB", "MRNA", "ZS", "DLTR", "SGEN", "ALGN", "ENPH",
+    "WBA", "EBAY", "JD", "LCID", "RIVN", "ZM"
+  ],
+  "lastUpdated": "2024-01-01",
+  "sectors": {
+    "Technology": ["AAPL", "MSFT", "NVDA", "AVGO", "CSCO", "ADBE"],
+    "Consumer": ["AMZN", "TSLA", "PEP", "COST", "SBUX"],
+    "Healthcare": ["AZN", "AMGN", "ISRG", "VRTX", "GILD", "REGN"],
+    "Communication": ["META", "GOOGL", "NFLX", "TMUS", "CHTR"]
+  }
+}
