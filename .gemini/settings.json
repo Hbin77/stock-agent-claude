@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "nasdaq-stock-server": {
+      "command": "/opt/homebrew/bin/node",
+      "args": [
+        "/Users/baghyeonbin/stock-agent-claude/mcp-server/index.js"
+      ],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}
