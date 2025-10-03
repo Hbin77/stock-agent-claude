@@ -3,14 +3,6 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { stockTools } from './stock-tools.js';
-import { EmailNotifier } from './email-notifier.js';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-// 이메일 알림 시스템 초기화
-const emailNotifier = new EmailNotifier();
-const recipientEmail = process.env.NOTIFICATION_EMAIL;
 
 // MCP 서버 생성
 const server = new Server(
@@ -25,7 +17,7 @@ const server = new Server(
     }
 );
 
-// 도구 목록 정의 (이메일 도구 추가)
+// 도구 목록 정의
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
         {
@@ -102,61 +94,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                 },
                 required: ['symbol']
             }
-        },
-        // 🆕 이메일 도구들
-        {
-            name: 'send_stock_alert_email',
-            description: 'Send stock price alert via email to configured recipient',
-            inputSchema: {
-                type: 'object',
-                properties: {
-                    symbol: { 
-                        type: 'string',
-                        description: 'Stock symbol to get alert for'
-                    }
-                },
-                required: ['symbol']
-            }
-        },
-        {
-            name: 'send_technical_alert_email',
-            description: 'Send technical analysis alert via email',
-            inputSchema: {
-                type: 'object',
-                properties: {
-                    symbol: { type: 'string' }
-                },
-                required: ['symbol']
-            }
-        },
-        {
-            name: 'send_market_overview_email',
-            description: 'Send NASDAQ-100 market overview via email',
-            inputSchema: {
-                type: 'object',
-                properties: {}
-            }
-        },
-        {
-            name: 'schedule_daily_report',
-            description: 'Schedule daily market report at specified hour (24-hour format, 0-23)',
-            inputSchema: {
-                type: 'object',
-                properties: {
-                    hour: { 
-                        type: 'number',
-                        description: 'Hour in 24-hour format (e.g., 20 for 8 PM)',
-                        minimum: 0,
-                        maximum: 23
-                    }
-                },
-                required: ['hour']
-            }
         }
     ]
 }));
 
-// 도구 실행 핸들러 (이메일 기능 추가)
+// 도구 실행 핸들러
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     
@@ -187,45 +129,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case 'get_financial_info':
                 result = await stockTools.getFinancialInfo(args.symbol);
                 break;
-            
-            // 🆕 이메일 도구 핸들러
-            case 'send_stock_alert_email':
-                const stockData = await stockTools.getStockPrice(args.symbol);
-                await emailNotifier.sendPriceAlert(stockData, recipientEmail);
-                result = { 
-                    success: true, 
-                    message: `Stock alert for ${args.symbol} sent to ${recipientEmail}`,
-                    data: stockData
-                };
-                break;
-                
-            case 'send_technical_alert_email':
-                const indicators = await stockTools.getTechnicalIndicators(args.symbol);
-                await emailNotifier.sendTechnicalAlert(indicators, recipientEmail);
-                result = { 
-                    success: true, 
-                    message: `Technical alert for ${args.symbol} sent to ${recipientEmail}`,
-                    signal: indicators.signal.action
-                };
-                break;
-                
-            case 'send_market_overview_email':
-                const overview = await stockTools.getNasdaq100Overview();
-                await emailNotifier.sendMarketOverview(overview, recipientEmail);
-                result = { 
-                    success: true, 
-                    message: `Market overview sent to ${recipientEmail}`,
-                    trend: overview.marketTrend
-                };
-                break;
-                
-            case 'schedule_daily_report':
-                scheduleDailyReport(args.hour, recipientEmail);
-                result = { 
-                    success: true, 
-                    message: `Daily report scheduled at ${args.hour}:00 (24-hour format) for ${recipientEmail}` 
-                };
-                break;
                 
             default:
                 throw new Error(`Unknown tool: ${name}`);
@@ -253,30 +156,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 });
 
-// 📅 매일 리포트 스케줄러
-function scheduleDailyReport(hour, email) {
-    console.error(`📅 Daily report scheduled at ${hour}:00 for ${email}`);
-    
-    setInterval(async () => {
-        const now = new Date();
-        if (now.getHours() === hour && now.getMinutes() === 0) {
-            console.error(`⏰ Sending daily report at ${hour}:00...`);
-            try {
-                const overview = await stockTools.getNasdaq100Overview();
-                await emailNotifier.sendMarketOverview(overview, email);
-                console.error('✅ Daily report sent!');
-            } catch (error) {
-                console.error('❌ Failed to send daily report:', error.message);
-            }
-        }
-    }, 60000); // 매 1분마다 체크
-}
-
 // 서버 시작
 async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error('NASDAQ-100 Stock MCP Server running with Email Support...');
+    console.error('NASDAQ-100 Stock MCP Server running...');
 }
 
 main().catch((error) => {
