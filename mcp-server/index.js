@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -7,7 +6,9 @@ import { EmailNotifier } from './email-notifier.js';
 import { PortfolioTracker, PortfolioMonitor } from './portfolio-tracker.js';
 import dotenv from 'dotenv';
 
-dotenv.config();
+// Load environment variables with quiet mode to prevent stdout interference
+// MCP uses stdio for JSON-RPC communication, so any stdout output breaks the protocol
+dotenv.config({ quiet: true });
 
 // 이메일 알림 시스템 초기화
 const emailNotifier = new EmailNotifier();
@@ -378,6 +379,10 @@ function monitorStockChanges(symbols, threshold, checkIntervalMinutes, email) {
 
 // 서버 시작
 async function main() {
+    // Redirect all console.log to stderr to prevent stdout contamination
+    // MCP protocol uses stdout exclusively for JSON-RPC messages
+    console.log = console.error;
+
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error('NASDAQ-100 Stock MCP Server running with Email Support...');
