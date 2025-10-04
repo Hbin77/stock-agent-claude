@@ -4,6 +4,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { stockTools } from './stock-tools.js';
 import { EmailNotifier } from './email-notifier.js';
 import { PortfolioTracker, PortfolioMonitor } from './portfolio-tracker.js';
+import { PortfolioDailyAnalyzer } from './portfolio-daily-analyzer.js';
+import { AIScoreEngine } from './ai-scoring-engine.js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -30,6 +32,8 @@ console.error('  NOTIFICATION_EMAIL:', recipientEmail || 'NOT SET');
 // 포트폴리오 시스템 초기화
 const portfolioTracker = new PortfolioTracker();
 const portfolioMonitor = new PortfolioMonitor(portfolioTracker, stockTools, emailNotifier);
+const aiScoreEngine = new AIScoreEngine();
+const portfolioAnalyzer = new PortfolioDailyAnalyzer(portfolioTracker, stockTools, aiScoreEngine);
 
 // MCP 서버 생성
 const server = new Server(
@@ -196,6 +200,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                 },
                 required: ['symbols']
             }
+        },
+        {
+            name: 'send_daily_portfolio_report',
+            description: '포트폴리오 종합 일일 리포트를 이메일로 전송 (AI 분석, 추천, 시장 개요 포함)',
+            inputSchema: {
+                type: 'object',
+                properties: {}
+            }
+        },
+        {
+            name: 'schedule_portfolio_daily_report',
+            description: '매일 지정 시간에 포트폴리오 종합 리포트 자동 발송 스케줄링',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    hour: {
+                        type: 'number',
+                        description: 'Hour in 24-hour format (e.g., 9 for 9 AM)',
+                        minimum: 0,
+                        maximum: 23
+                    }
+                },
+                required: ['hour']
+            }
         }
     ]
 }));
@@ -275,15 +303,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const threshold = args.threshold || 5;
                 const interval = args.checkInterval || 5;
                 monitorStockChanges(args.symbols, threshold, interval, recipientEmail);
-                result = { 
-                    success: true, 
+                result = {
+                    success: true,
                     message: `Now monitoring ${args.symbols.join(', ')} for ${threshold}%+ changes every ${interval} minutes`,
                     symbols: args.symbols,
                     threshold: threshold,
                     checkInterval: interval
                 };
                 break;
-                
+
+            case 'send_daily_portfolio_report':
+                const reportData = await portfolioAnalyzer.generateDailyReport();
+                await emailNotifier.sendDailyPortfolioReport(reportData, recipientEmail);
+                result = {
+                    success: true,
+                    message: `Daily portfolio report sent to ${recipientEmail}`,
+                    summary: {
+                        portfolioValue: reportData.portfolio.totalCurrentValue,
+                        profitPercent: reportData.portfolio.totalProfitPercent,
+                        topPicksCount: reportData.topPicks?.length || 0,
+                        actionItemsCount: reportData.actionItems?.length || 0
+                    }
+                };
+                break;
+
+            case 'schedule_portfolio_daily_report':
+                schedulePortfolioDailyReport(args.hour, recipientEmail);
+                result = {
+                    success: true,
+                    message: `Portfolio daily report scheduled at ${args.hour}:00 (24-hour format) for ${recipientEmail}`
+                };
+                break;
+
             default:
                 throw new Error(`Unknown tool: ${name}`);
         }
@@ -324,6 +375,25 @@ function scheduleDailyReport(hour, email) {
                 console.error('✅ Daily report sent!');
             } catch (error) {
                 console.error('❌ Failed to send daily report:', error.message);
+            }
+        }
+    }, 60000); // 매 1분마다 체크
+}
+
+// 📊 포트폴리오 일일 리포트 스케줄러
+function schedulePortfolioDailyReport(hour, email) {
+    console.error(`📊 Portfolio daily report scheduled at ${hour}:00 for ${email}`);
+
+    setInterval(async () => {
+        const now = new Date();
+        if (now.getHours() === hour && now.getMinutes() === 0) {
+            console.error(`⏰ Sending portfolio daily report at ${hour}:00...`);
+            try {
+                const reportData = await portfolioAnalyzer.generateDailyReport();
+                await emailNotifier.sendDailyPortfolioReport(reportData, email);
+                console.error('✅ Portfolio daily report sent!');
+            } catch (error) {
+                console.error('❌ Failed to send portfolio daily report:', error.message);
             }
         }
     }, 60000); // 매 1분마다 체크
