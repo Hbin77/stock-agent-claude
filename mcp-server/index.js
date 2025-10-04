@@ -4,6 +4,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { stockTools } from './stock-tools.js';
 import { EmailNotifier } from './email-notifier.js';
+import { PortfolioTracker, PortfolioMonitor } from './portfolio-tracker.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -11,6 +12,10 @@ dotenv.config();
 // 이메일 알림 시스템 초기화
 const emailNotifier = new EmailNotifier();
 const recipientEmail = process.env.NOTIFICATION_EMAIL;
+
+// 포트폴리오 시스템 초기화
+const portfolioTracker = new PortfolioTracker();
+const portfolioMonitor = new PortfolioMonitor(portfolioTracker, stockTools, emailNotifier);
 
 // MCP 서버 생성
 const server = new Server(
@@ -152,6 +157,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                 },
                 required: ['hour']
             }
+        },
+        {
+            name: 'monitor_stock_changes',
+            description: 'Monitor stocks for significant price changes (5%+) and send email alerts automatically',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    symbols: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        description: 'Array of stock symbols to monitor (e.g., ["AAPL", "MSFT", "NVDA"])'
+                    },
+                    threshold: {
+                        type: 'number',
+                        description: 'Price change threshold percentage (default: 5)',
+                        default: 5
+                    },
+                    checkInterval: {
+                        type: 'number',
+                        description: 'Check interval in minutes (default: 5)',
+                        default: 5
+                    }
+                },
+                required: ['symbols']
+            }
         }
     ]
 }));
@@ -227,6 +257,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
                 break;
                 
+            case 'monitor_stock_changes':
+                const threshold = args.threshold || 5;
+                const interval = args.checkInterval || 5;
+                monitorStockChanges(args.symbols, threshold, interval, recipientEmail);
+                result = { 
+                    success: true, 
+                    message: `Now monitoring ${args.symbols.join(', ')} for ${threshold}%+ changes every ${interval} minutes`,
+                    symbols: args.symbols,
+                    threshold: threshold,
+                    checkInterval: interval
+                };
+                break;
+                
             default:
                 throw new Error(`Unknown tool: ${name}`);
         }
@@ -270,6 +313,67 @@ function scheduleDailyReport(hour, email) {
             }
         }
     }, 60000); // 매 1분마다 체크
+}
+
+// 🔔 실시간 주식 변동 모니터링
+const monitoredStocks = new Map(); // 이전 가격 저장
+
+function monitorStockChanges(symbols, threshold, checkIntervalMinutes, email) {
+    console.error(`\n🔔 Starting real-time monitoring for ${symbols.join(', ')}`);
+    console.error(`📊 Alert threshold: ${threshold}% change`);
+    console.error(`⏱️  Check interval: ${checkIntervalMinutes} minutes\n`);
+    
+    // 초기 가격 저장
+    symbols.forEach(async (symbol) => {
+        try {
+            const data = await stockTools.getStockPrice(symbol);
+            monitoredStocks.set(symbol, {
+                previousPrice: data.price,
+                lastChecked: new Date()
+            });
+            console.error(`✓ ${symbol}: Initial price ${data.price.toFixed(2)}`);
+        } catch (error) {
+            console.error(`✗ ${symbol}: Failed to get initial price - ${error.message}`);
+        }
+    });
+    
+    // 주기적으로 체크
+    setInterval(async () => {
+        for (const symbol of symbols) {
+            try {
+                const currentData = await stockTools.getStockPrice(symbol);
+                const stored = monitoredStocks.get(symbol);
+                
+                if (!stored) continue;
+                
+                const previousPrice = stored.previousPrice;
+                const changePercent = Math.abs(currentData.changePercent);
+                
+                console.error(`[${new Date().toLocaleTimeString()}] ${symbol}: ${currentData.price.toFixed(2)} (${currentData.changePercent >= 0 ? '+' : ''}${currentData.changePercent.toFixed(2)}%)`);
+                
+                // 임계값 초과 시 이메일 발송
+                if (changePercent >= threshold) {
+                    console.error(`🚨 ALERT! ${symbol} changed ${changePercent.toFixed(2)}% - Sending email...`);
+                    
+                    await emailNotifier.sendPriceAlert(currentData, email);
+                    
+                    // 중복 알림 방지: 현재 가격을 새로운 기준점으로 업데이트
+                    monitoredStocks.set(symbol, {
+                        previousPrice: currentData.price,
+                        lastChecked: new Date()
+                    });
+                    
+                    console.error(`✅ Alert sent for ${symbol}!`);
+                }
+                
+                // 너무 잦은 API 호출 방지
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+            } catch (error) {
+                console.error(`❌ Error monitoring ${symbol}: ${error.message}`);
+            }
+        }
+    }, checkIntervalMinutes * 60 * 1000);
 }
 
 // 서버 시작
