@@ -5,14 +5,27 @@ import { stockTools } from './stock-tools.js';
 import { EmailNotifier } from './email-notifier.js';
 import { PortfolioTracker, PortfolioMonitor } from './portfolio-tracker.js';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Get the directory of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Load environment variables with quiet mode to prevent stdout interference
 // MCP uses stdio for JSON-RPC communication, so any stdout output breaks the protocol
-dotenv.config({ quiet: true });
+// Use absolute path to ensure .env is found regardless of working directory
+dotenv.config({ path: join(__dirname, '.env'), quiet: true });
 
 // 이메일 알림 시스템 초기화
 const emailNotifier = new EmailNotifier();
 const recipientEmail = process.env.NOTIFICATION_EMAIL;
+
+// Debug: Log environment variables (to stderr, safe for MCP)
+console.error('🔧 Environment Check:');
+console.error('  EMAIL_USER:', process.env.EMAIL_USER || 'NOT SET');
+console.error('  EMAIL_APP_PASSWORD:', process.env.EMAIL_APP_PASSWORD ? '***configured***' : 'NOT SET');
+console.error('  NOTIFICATION_EMAIL:', recipientEmail || 'NOT SET');
 
 // 포트폴리오 시스템 초기화
 const portfolioTracker = new PortfolioTracker();
